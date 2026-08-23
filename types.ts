@@ -80,7 +80,7 @@ export interface LogEntry {
   type: 'info' | 'system' | 'action' | 'success' | 'error';
 }
 
-export type ImageResolution = '1K' | '2K' | '4K';
+export type ImageResolution = '1K';
 
 export interface GeneratedImage {
   id: string;

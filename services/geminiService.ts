@@ -613,7 +613,7 @@ export const generateArt = async (
   bgMode: BackgroundMode,
   customBgColor: string,
   aspectRatio: AspectRatio = "1:1",
-  resolution: ImageResolution,
+  resolution: ImageResolution = "1K",
   analysis: StyleAnalysis | null,
   referenceFiles: UploadedFile[],
   useStagingCharacter: boolean,

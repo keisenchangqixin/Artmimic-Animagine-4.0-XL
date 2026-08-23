@@ -81,7 +81,7 @@ const ArtGenerator: React.FC<ArtGeneratorProps> = ({
   );
   const [customBgColor, setCustomBgColor] = useState("#0f172a");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1");
-  const [resolution, setResolution] = useState<ImageResolution>("1K");
+  const resolution: ImageResolution = "1K";
   const [rememberSettings, setRememberSettings] = useState(false);
 
   useEffect(() => {
@@ -91,9 +91,6 @@ const ArtGenerator: React.FC<ArtGeneratorProps> = ({
         get("savedAspectRatio").then((ratio) => {
           if (ratio) setAspectRatio(ratio as AspectRatio);
         });
-        get("savedResolution").then((res) => {
-          if (res) setResolution(res as ImageResolution);
-        });
       }
     });
   }, []);
@@ -102,11 +99,11 @@ const ArtGenerator: React.FC<ArtGeneratorProps> = ({
     if (rememberSettings) {
       set("rememberSettings", true);
       set("savedAspectRatio", aspectRatio);
-      set("savedResolution", resolution);
+      set("savedResolution", "1K");
     } else {
       set("rememberSettings", false);
     }
-  }, [rememberSettings, aspectRatio, resolution]);
+  }, [rememberSettings, aspectRatio]);
 
   const [isMagicRolling, setIsMagicRolling] = useState(false);
   const [magicRollOptions, setMagicRollOptions] = useState<string[]>([]);
@@ -1577,16 +1574,14 @@ const ArtGenerator: React.FC<ArtGeneratorProps> = ({
             </div>
           </div>
           <div>
-            <div className="grid grid-cols-3 gap-2">
-              {(["1K", "2K", "4K"] as ImageResolution[]).map((res) => (
-                <button
-                  key={res}
-                  onClick={() => setResolution(res)}
-                  className={`py-2 px-1 rounded-lg border-2 text-xs font-medium transition-all ${resolution === res ? "bg-emerald-500 border-slate-700 text-white shadow-[2px_2px_0_rgba(51,65,85,1)]" : "bg-white border-slate-400 text-slate-600 shadow-[2px_2px_0_rgba(51,65,85,1)]"}`}
-                >
-                  {res}
-                </button>
-              ))}
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                disabled
+                className="py-2 px-3 rounded-lg border-2 text-xs font-bold bg-emerald-500 border-slate-700 text-white shadow-[2px_2px_0_rgba(51,65,85,1)] cursor-default flex items-center justify-center gap-1"
+              >
+                <span>1K (Standard)</span>
+                <span className="text-[10px] opacity-80 font-mono">[Locked]</span>
+              </button>
             </div>
           </div>
         </div>
