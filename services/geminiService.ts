@@ -607,6 +607,89 @@ export const generateMagicRoll = async (
   });
 };
 
+export const renderTextOverlayOnCanvas = async (
+  imageDataUrl: string,
+  topText: string,
+  bottomText: string
+): Promise<string> => {
+  if (!topText && !bottomText) return imageDataUrl;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(imageDataUrl);
+
+        ctx.drawImage(img, 0, 0);
+
+        const fontSize = Math.max(24, Math.floor(canvas.height * 0.048));
+        ctx.font = `900 ${fontSize}px "Impact", "Arial Black", sans-serif, system-ui`;
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#FFFFFF";
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = Math.max(5, Math.floor(fontSize * 0.14));
+        ctx.lineJoin = "round";
+
+        const padX = canvas.width * 0.05;
+
+        if (topText && topText.trim()) {
+          ctx.textBaseline = "top";
+          const topY = Math.floor(canvas.height * 0.04);
+          const formattedTop = topText.trim().toUpperCase();
+          ctx.strokeText(formattedTop, canvas.width / 2, topY, canvas.width - padX * 2);
+          ctx.fillText(formattedTop, canvas.width / 2, topY, canvas.width - padX * 2);
+        }
+
+        if (bottomText && bottomText.trim()) {
+          ctx.textBaseline = "bottom";
+          const bottomY = canvas.height - Math.floor(canvas.height * 0.04);
+          const formattedBottom = bottomText.trim().toUpperCase();
+          ctx.strokeText(formattedBottom, canvas.width / 2, bottomY, canvas.width - padX * 2);
+          ctx.fillText(formattedBottom, canvas.width / 2, bottomY, canvas.width - padX * 2);
+        }
+
+        resolve(canvas.toDataURL("image/png"));
+      } catch (err) {
+        console.error("Canvas overlay error:", err);
+        resolve(imageDataUrl);
+      }
+    };
+    img.onerror = () => resolve(imageDataUrl);
+    img.src = imageDataUrl;
+  });
+};
+
+const extractFallbackTextOverlay = (text: string): { topText: string; bottomText: string } => {
+  let topText = "";
+  let bottomText = "";
+
+  const match = text.match(/Text Overlay(?:\s*,?\s*text split between top and bottom)?\s*:\s*([^,\n]+)(?:,\s*([^,\n]+))?/i);
+  if (match) {
+    const rawText = match[1]?.trim() || "";
+    const secondPart = match[2]?.trim();
+    if (secondPart) {
+      topText = rawText;
+      bottomText = secondPart;
+    } else {
+      const words = rawText.split(" ");
+      if (words.length >= 4) {
+        const mid = Math.ceil(words.length / 2);
+        topText = words.slice(0, mid).join(" ");
+        bottomText = words.slice(mid).join(" ");
+      } else {
+        bottomText = rawText;
+      }
+    }
+  }
+
+  return { topText, bottomText };
+};
+
 export const generateArt = async (
   prompt: string,
   influence: string,
@@ -1044,10 +1127,18 @@ Analyze all the above prompts, directives, background settings, style master det
 Convert this entire creative vision into a clean, comma-separated Danbooru tag prompt specifically optimized for the Animagine XL 4.0 anime rendering engine, along with a comprehensive negative prompt tag list.
 
 Your positive tag prompt MUST start with: "masterpiece, high score, great score, absurdres, "
+
+TEXT OVERLAY EXTRACTION MANDATE:
+If the user's prompt contains any request for a text overlay (e.g., "Text Overlay...", "text split between top and bottom: ...", "Text overlay: ..."), extract the exact text into topText and bottomText fields in a "textOverlay" object. If it specifies text split between top and bottom, split the sentence logically across topText and bottomText.
+
 Return ONLY a valid JSON object:
 {
   "prompt": "masterpiece, high score, great score, absurdres, 1girl, solo, dark purple short hair, purple eyes...",
-  "negative_prompt": "lowres, bad anatomy, bad hands, text, error, missing finger, extra digits, fewer digits, cropped, worst quality, low quality, low score, bad score, average score, signature, watermark, username, blurry, nsfw, naked"
+  "negative_prompt": "lowres, bad anatomy, bad hands, text, error, missing finger, extra digits, fewer digits, cropped, worst quality, low quality, low score, bad score, average score, signature, watermark, username, blurry, nsfw, naked",
+  "textOverlay": {
+    "topText": "I CAN'T BEAT YOU",
+    "bottomText": "WITHOUT GETTING CLOSER TO YOU"
+  }
 }`;
 
     parts.push({ text: tagSynthesisInstruction });
@@ -1063,13 +1154,26 @@ Return ONLY a valid JSON object:
 
     let animaginePrompt = "";
     let animagineNegativePrompt = "lowres, bad anatomy, bad hands, text, error, missing finger, extra digits, fewer digits, cropped, worst quality, low quality, low score, bad score, average score, signature, watermark, username, blurry, nsfw, naked";
+    let extractedTopText = "";
+    let extractedBottomText = "";
 
     try {
       const parsed = JSON.parse(synthResponse.text || "{}");
       if (parsed.prompt) animaginePrompt = parsed.prompt;
       if (parsed.negative_prompt) animagineNegativePrompt = parsed.negative_prompt;
+      if (parsed.textOverlay) {
+        if (parsed.textOverlay.topText) extractedTopText = parsed.textOverlay.topText;
+        if (parsed.textOverlay.bottomText) extractedBottomText = parsed.textOverlay.bottomText;
+      }
     } catch (e) {
       animaginePrompt = `masterpiece, high score, great score, absurdres, ${prompt || "1girl, solo"}`;
+    }
+
+    // Fallback text overlay extraction if Gemini didn't return textOverlay object
+    if (!extractedTopText && !extractedBottomText) {
+      const fallback = extractFallbackTextOverlay(prompt + " " + influence);
+      extractedTopText = fallback.topText;
+      extractedBottomText = fallback.bottomText;
     }
 
     if (!animaginePrompt.toLowerCase().includes("masterpiece")) {
@@ -1120,7 +1224,14 @@ Return ONLY a valid JSON object:
       throw new Error("No image data returned from Animagine XL 4.0 production engine.");
     }
 
+    // Step 4: Apply Canvas Text Overlay post-processing if requested
+    if (extractedTopText || extractedBottomText) {
+      const finalComposite = await renderTextOverlayOnCanvas(resData.image, extractedTopText, extractedBottomText);
+      return finalComposite;
+    }
+
     return resData.image;
   });
 };
+
 
